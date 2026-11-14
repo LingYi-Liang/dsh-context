@@ -114,14 +114,15 @@ export function patchBufferedCommand(
   pending: Record<string, CommandStateRecord[]>,
   callId: string,
   patch: (rec: CommandStateRecord) => CommandStateRecord,
-): boolean {
+): CommandStateRecord | null {
   for (const root in pending) {
     const idx = pending[root].findIndex(r => r.call === callId)
     if (idx < 0) continue
     const list = [...pending[root]]
-    list[idx] = patch(list[idx])
+    const patched = patch(list[idx])
+    list[idx] = patched
     st.pendingCodeCmds = { ...pending, [root]: list }
-    return true
+    return patched
   }
-  return false
+  return null
 }

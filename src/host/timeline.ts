@@ -293,7 +293,7 @@ export const contextTimelineSchema = z.object({
   spans: z.array(timingSpanSchema).optional(),
 }).strict() as unknown as z.ZodType<ContextTimeline>
 
-const timelineStateSchema = z.object({
+export const timelineStateSchema = z.object({
   surface: z.array(surfaceNodeSchema),
   assistantReasoning: z.number().int().nonnegative(),
   assistantAnswerTokens: z.number().int().nonnegative(),
@@ -338,6 +338,7 @@ const timelineStateSchema = z.object({
   lastUser: z.string().optional(),
   stepStart: z.object({
     time: z.number(),
+    seq: z.number().optional(),
     firstToken: z.number().optional(),
   }).strict().optional(),
   stepWaits: z.array(z.object({ start: z.number(), end: z.number() }).strict()).optional(),

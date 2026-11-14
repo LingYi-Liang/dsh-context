@@ -184,6 +184,7 @@ export interface TimelineState {
   timing?: TimingTotals
   stepStart?: {
     time: number
+    seq?: number
     firstToken?: number
   }
   stepWaits?: { start: number; end: number }[]
