@@ -725,6 +725,7 @@ POST delta {sessionId,
 <tr><td><b>M5</b> 前端重接线</td><td>§9 映射逐板块切换；删除缓存簇；unchanged 协议统一</td><td>浏览器实测（390px→桌面、双语、长会话、/context 弹窗）；payload 字节数与请求数对比报告；堆峰值对比</td></tr>
 <tr><td><b>M6</b> 清场</td><td>删投影注册/JSON 缓存/foldCache/sweep/foldJournal/旧路由与旧测试；compat 矩阵重写；compatibility.md 更新（数据面章节整体重写）</td><td><code>pnpm run check</code> 100% 覆盖；三线 compat 全绿；release notes 迁移说明</td></tr>
 </table>
+<div class="note"><b>M3/M4 实测基线（2026-11-15，真实语料 106 会话 / 43,787 事件，zstd 解码经调度器播种）</b>：播种 2.35s、播种增量 RSS ≈ 0 MB（峰值即装载语料后的基线 548 MB，切片逐片排水生效；外推 1,158 会话约 ×10 事件量，远低于 300 MB 门）、库 30.7 MB（≈700 B/事件）、coverage 106/106。查询 P99：summary 22.3ms、days（全历史窗）36.3ms、tally 13.9ms、sessions 6.0ms、单会话路由 ≤2.1ms——全部 ≤50ms 门；行数基线（query/status）：steps 5233 / requests 5219 / tool_calls 7882 / surface_nodes 13,895 / file_ops 10,839 / timing_spans 34,597 / events 693 / skill_loads 13。物化缓存预案两个触发条件均未命中（summary P99 &lt; 50ms；请求行总量 5,219 ≪ 2×10⁵），维持窗口界聚合、不落地物化。</div>
 <p class="small">测试复用：tests/host fixtures 与 fold-* 套件全部保留（折叠器未变）；overview*/snapshot/heads/facts 等路由测试改造为 DAO/SQL 测试；overviewMemory 变更为 M3 验收基准。</p>
 
 <!-- ============ ⑫ ============ -->
