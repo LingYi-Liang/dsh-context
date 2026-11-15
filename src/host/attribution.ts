@@ -109,7 +109,8 @@ export function createToolAttribution(ctx: Context, harnessVersion?: string): To
     const instance = tools as { register: (this: unknown, definition?: { name?: unknown }, ...args: unknown[]) => unknown }
     const wrappedRegister = function (this: unknown, definition?: { name?: unknown }, ...args: unknown[]) {
       const toolName = definition?.name
-      let owner = lastReader
+      const caller = rawInstanceOf(this) === this ? undefined : (this as { ctx?: { fiber?: { name?: unknown } } }).ctx?.fiber?.name
+      let owner = typeof caller === 'string' ? caller : lastReader
       if (!owner || owner === 'root' || owner === self) {
         owner = callerPackageFrom(new Error().stack)
       }

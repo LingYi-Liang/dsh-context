@@ -663,6 +663,29 @@ describe('createToolAttribution', () => {
     orphan()
   })
 
+  test('a tracked registration is attributed to the plugin that calls register, not the last tools reader', async () => {
+    const app = new Context()
+    const tools = new TrackedTools(app)
+    const attribution = createToolAttribution(app)
+    let held!: TrackedTools
+    await app.plugin({
+      name: 'provider-a',
+      apply(sub) {
+        held = (sub as unknown as { tools: TrackedTools }).tools
+      },
+    })
+    await app.plugin({
+      name: 'provider-b',
+      apply(sub) {
+        void (sub as unknown as { tools: TrackedTools }).tools
+      },
+    })
+    held.register({ name: 'held_tool' })
+    assert.equal(attribution.ownerOf('held_tool'), 'provider-a', 'a later reader does not take over a held handle')
+    tools.register({ name: 'raw_tool' })
+    assert.equal(attribution.ownerOf('raw_tool'), 'provider-b', 'a call on the unwrapped instance still falls back to the last reader')
+  })
+
   test('tags boot-time tools whose providers predate the hook as unknown', () => {
     const app = new Context()
     const fake = {
