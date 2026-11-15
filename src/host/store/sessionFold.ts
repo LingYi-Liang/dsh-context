@@ -65,12 +65,20 @@ function stateToSessionPatch(state: TimelineState, lastSeq: number, now: number,
   return patch
 }
 
+export interface SessionIdentity {
+  readonly path: string
+  readonly size: number
+  readonly mtime: number
+}
+
 export interface FlushOptions {
   readonly now?: number
-  readonly identity?: { readonly path: string; readonly size: number; readonly mtime: number }
+  readonly identity?: SessionIdentity
   readonly foldState?: boolean
   readonly detailRevBump?: boolean
   readonly opsPerTransaction?: number
+  readonly extraSession?: RowPatch
+  readonly status?: 'ok' | 'folding'
 }
 
 export function flushSession(
@@ -95,12 +103,12 @@ export function flushSession(
     chunks.push(ops.slice(start, start + chunkSize))
   }
   if (chunks.length === 0) chunks.push([])
-  const multi = chunks.length > 1
   const writes: SessionWrite[] = chunks.map((chunk, index) => {
     const last = index === chunks.length - 1
+    const status = last ? options.status ?? 'ok' : 'folding'
     const session: RowPatch = index === 0
-      ? { ...stateToSessionPatch(run.state, run.lastSeq, now, multi ? 'folding' : 'ok'), ...identityPatch }
-      : { fold_status: 'ok' }
+      ? { ...stateToSessionPatch(run.state, run.lastSeq, now, status), ...(options.extraSession ?? {}), ...identityPatch }
+      : { ...(options.extraSession ?? {}), fold_status: status }
     return {
       sessionId: run.emitter.sessionId,
       ...(last || index === 0 ? { session } : {}),

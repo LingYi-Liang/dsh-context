@@ -34,6 +34,14 @@ const RECOMPUTE_SQL = `UPDATE sessions SET
       ORDER BY seq DESC LIMIT 1), 0)
     + COALESCE((SELECT tools_tokens FROM header_epochs
       WHERE header_epochs.session_id = sessions.id ORDER BY seq DESC LIMIT 1), 0)
+    , last_prompt_at = (SELECT MAX(time) FROM surface_nodes
+      WHERE surface_nodes.session_id = sessions.id AND surface_nodes.cat = 'user')
+    , updated_at = MAX(
+        sessions.created_at,
+        COALESCE((SELECT MAX(time) FROM surface_nodes
+          WHERE surface_nodes.session_id = sessions.id AND surface_nodes.cat = 'user'), 0),
+        COALESCE((SELECT MAX(time) FROM requests WHERE requests.session_id = sessions.id), 0)
+      )
   WHERE sessions.id = ?`
 
 function statementOf(db: DatabaseSync, cache: Map<string, StatementSync>, key: string, sql: string): StatementSync {
@@ -47,10 +55,14 @@ function statementOf(db: DatabaseSync, cache: Map<string, StatementSync>, key: s
 function upsertSql(table: string, pk: readonly string[], insertColumns: readonly string[], updateColumns: readonly string[]): string {
   const quoted = insertColumns.map(c => `"${c}"`)
   const placeholders = insertColumns.map(() => '?')
-  const updates = updateColumns.filter(c => !pk.includes(c)).map(c => `"${c}" = excluded."${c}"`)
+  const updates = updateColumns.filter(c => !pk.includes(c)).map(c =>
+    c === 'last_seq' && table === 'sessions'
+      ? `"${c}" = MAX(sessions."${c}", excluded."${c}")`
+      : `"${c}" = excluded."${c}"`)
   const conflict = pk.map(c => `"${c}"`).join(', ')
+  const guard = table === 'fold_state' ? ' WHERE excluded."last_seq" >= "fold_state"."last_seq"' : ''
   /* v8 ignore next 1 */
-  const updateClause = updates.length > 0 ? `DO UPDATE SET ${updates.join(', ')}` : 'DO NOTHING'
+  const updateClause = updates.length > 0 ? `DO UPDATE SET ${updates.join(', ')}${guard}` : 'DO NOTHING'
   return `INSERT INTO "${table}" (${quoted.join(', ')}) VALUES (${placeholders.join(', ')})
     ON CONFLICT(${conflict}) ${updateClause}`
 }
@@ -107,9 +119,6 @@ export class StoreWriter {
         throw new Error(`"${table}" upsert is missing primary key column "${key}"`)
       }
     }
-    // NOT NULL columns absent from the patch are filled with their declared
-    // defaults on the INSERT side only: an existing row's DO UPDATE never
-    // touches them, so patch-merges stay idempotent across replays.
     const fill: Array<[string, RowValue]> = []
     for (const info of this.columnsOf(table)) {
       if (info.notnull === 1 && !Object.hasOwn(patch, info.name)) {
@@ -182,29 +191,15 @@ export class StoreWriter {
     if (hasSession || hasOps || hasCut) {
       this.prepare('sessions:recompute', RECOMPUTE_SQL).run(input.sessionId)
     }
-    this.bumpGeneration()
   }
 
   write(input: SessionWrite | readonly SessionWrite[]): void {
     const writes: readonly SessionWrite[] = Array.isArray(input) ? input : [input]
     const pending = writes.filter(write => this.hasWork(write))
     if (pending.length === 0) return
-    let began = false
-    try {
-      this.db.exec('BEGIN IMMEDIATE')
-      began = true
+    this.transact(() => {
       for (const write of pending) this.writeOne(write)
-      this.db.exec('COMMIT')
-    } catch (error) {
-      if (began) {
-        try {
-          this.db.exec('ROLLBACK')
-        } catch {
-          // The original error stays actionable.
-        }
-      }
-      throw error
-    }
+    })
   }
 
   private hasWork(input: SessionWrite): boolean {
@@ -214,26 +209,40 @@ export class StoreWriter {
     return input.inheritedCutSeq !== undefined
   }
 
-  deleteSession(sessionId: string): boolean {
-    const row = this.db.prepare('SELECT id FROM sessions WHERE id = ?').get(sessionId)
-    if (row === undefined) return false
-    let began = false
+  private transact(run: () => void): void {
+    this.db.exec('BEGIN IMMEDIATE')
     try {
-      this.db.exec('BEGIN IMMEDIATE')
-      began = true
-      this.db.prepare('DELETE FROM sessions WHERE id = ?').run(sessionId)
+      run()
       this.bumpGeneration()
       this.db.exec('COMMIT')
-      return true
     } catch (error) {
-      if (began) {
-        try {
-          this.db.exec('ROLLBACK')
-        } catch {
-          // The original error stays actionable.
-        }
+      try {
+        this.db.exec('ROLLBACK')
+      } catch {
+        // The original error stays actionable.
       }
       throw error
     }
+  }
+
+  deleteSession(sessionId: string): boolean {
+    const row = this.db.prepare('SELECT id FROM sessions WHERE id = ?').get(sessionId)
+    if (row === undefined) return false
+    this.transact(() => {
+      this.db.prepare('DELETE FROM sessions WHERE id = ?').run(sessionId)
+    })
+    return true
+  }
+
+  clearSessionChildren(sessionId: string): void {
+    const tables: readonly ChildTable[] = [
+      'steps', 'requests', 'tool_calls', 'surface_nodes', 'system_prompts', 'header_epochs',
+      'header_tools', 'events', 'file_ops', 'skill_loads', 'timing_spans', 'fold_state',
+    ]
+    this.transact(() => {
+      for (const table of tables) {
+        this.db.prepare(`DELETE FROM "${table}" WHERE session_id = ?`).run(sessionId)
+      }
+    })
   }
 }

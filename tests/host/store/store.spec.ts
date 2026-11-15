@@ -422,6 +422,47 @@ describe('writer', () => {
     }
   })
 
+  test('updated_at and last_prompt_at recompute from user surface and request activity', () => {
+    const { handle, writer } = writerFixture()
+    try {
+      seedSession(writer, 's1')
+      writer.write({
+        sessionId: 's1',
+        ops: [
+          { table: 'surface_nodes', patch: { session_id: 's1', seq: 1, cat: 'user', time: 30 } },
+          { table: 'surface_nodes', patch: { session_id: 's1', seq: 2, cat: 'tool', time: 99 } },
+          { table: 'requests', patch: { session_id: 's1', seq: 3, time: 50 } },
+        ],
+      })
+      const session = handle.db.prepare('SELECT updated_at, last_prompt_at FROM sessions WHERE id = ?').get('s1') as { updated_at: number; last_prompt_at: number }
+      assert.equal(session.updated_at, Math.max(1, 30, 50))
+      assert.equal(session.last_prompt_at, 30)
+    } finally {
+      handle.close()
+    }
+  })
+
+  test('clearSessionChildren drops child and fold rows but keeps the session row', () => {
+    const { handle, writer } = writerFixture()
+    try {
+      seedSession(writer, 's1')
+      writer.write({
+        sessionId: 's1',
+        ops: [{ table: 'requests', patch: { session_id: 's1', seq: 1, time: 1, input_tokens: 3 } }],
+        foldState: { lastSeq: 5, stateJson: '{}' },
+      })
+      writer.clearSessionChildren('s1')
+      const session = handle.db.prepare('SELECT id, created_at FROM sessions WHERE id = ?').get('s1') as Record<string, unknown>
+      assert.equal(session.created_at, 1)
+      const requests = handle.db.prepare('SELECT COUNT(*) AS n FROM requests WHERE session_id = ?').get('s1') as { n: number }
+      assert.equal(requests.n, 0)
+      const state = handle.db.prepare('SELECT COUNT(*) AS n FROM fold_state WHERE session_id = ?').get('s1') as { n: number }
+      assert.equal(state.n, 0)
+    } finally {
+      handle.close()
+    }
+  })
+
   test('fold state upserts, drops and participates in the same transaction', () => {
     const { handle, writer } = writerFixture()
     try {
@@ -484,7 +525,7 @@ describe('writer', () => {
       assert.equal(state.state_json, '')
       const session = handle.db.prepare('SELECT fold_status, blank, last_seq FROM sessions WHERE id = ?').get('s1') as Record<string, unknown>
       assert.equal(session.fold_status, 'pending')
-      assert.equal(session.blank, 0)
+      assert.equal(session.blank, 1)
       assert.equal(session.last_seq, -1)
     } finally {
       handle.close()
@@ -552,7 +593,7 @@ describe('writer', () => {
       ])
       const count = (handle.db.prepare('SELECT COUNT(*) AS n FROM sessions').get() as { n: number }).n
       assert.equal(count, 2)
-      assert.equal(generations.length, 2)
+      assert.equal(generations.length, 1)
     } finally {
       handle.close()
     }

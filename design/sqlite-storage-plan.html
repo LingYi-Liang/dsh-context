@@ -720,7 +720,7 @@ POST delta {sessionId,
 <tr><th style="width:90px">里程碑</th><th>内容</th><th style="width:330px">验收</th></tr>
 <tr><td><b>M1</b> 地基</td><td>DB 打开/门禁/重建（§4.1）；meta/sessions DAO；STRICT schema + 索引 DDL 单元测试</td><td>版本不符重建、他方库拒开、:memory: 降级三路径测试全绿</td></tr>
 <tr><td><b>M2</b> 折叠→行</td><td>行发射器改造（终结点：请求/步骤/工具/表面/事件/span/技能）；活写通器；fold_state 续折；read(last_seq+1) 增量</td><td><b>对拍测试</b>：现 fixtures 全量重折 → 行集 ↔ 现 TimelineState/ActivityState wire 逐字段一致；diff-fold 继续 0 退出</td></tr>
-<tr><td><b>M3</b> 回填调度</td><td>boot 对账 / 队列排序 / 切片+worker 行批次 / 节流 / coverage SQL 化 / 删除对账</td><td>1,158 会话语料（现状基准）播种内存峰值 &lt; 300 MB、时长 ≤ 现状；coverage 数字与 folds 数一致</td></tr>
+<tr><td><b>M3</b> 回填调度</td><td>boot 对账（cwd/live 准入、vanished_at 延迟删除）/ 队列排序 / 切片行批次（coldReads.admit 堆门 + 150ms 预算自适应切片；worker 离线批次视实测基准后定，见评审修订）/ 节流 / 失败退避重试 / fold_state 64MB LRU / 身份门跳过未变 ok 会话 / coverage SQL 化</td><td>1,158 会话语料（现状基准）播种内存峰值 &lt; 300 MB、时长 ≤ 现状；coverage 数字与 folds 数一致</td></tr>
 <tr><td><b>M4</b> 查询 API</td><td>16 条路由 + 统一 envelope/generation unchanged；SQL 性能验收（§6 门槛）</td><td>旧 overview 四 parts 输出与新 query/* 输出在基准语料上对拍相等；P99 ≤50ms；query/status 记录行数/库大小基线（§6 规模天花板触发条件的观测起点）</td></tr>
 <tr><td><b>M5</b> 前端重接线</td><td>§9 映射逐板块切换；删除缓存簇；unchanged 协议统一</td><td>浏览器实测（390px→桌面、双语、长会话、/context 弹窗）；payload 字节数与请求数对比报告；堆峰值对比</td></tr>
 <tr><td><b>M6</b> 清场</td><td>删投影注册/JSON 缓存/foldCache/sweep/foldJournal/旧路由与旧测试；compat 矩阵重写；compatibility.md 更新（数据面章节整体重写）</td><td><code>pnpm run check</code> 100% 覆盖；三线 compat 全绿；release notes 迁移说明</td></tr>

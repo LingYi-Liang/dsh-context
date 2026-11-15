@@ -4,7 +4,7 @@ import { DatabaseSync } from 'node:sqlite'
 
 export const STORE_APPLICATION_ID = 0x44534358
 
-export const STORE_SCHEMA_VERSION = 1
+export const STORE_SCHEMA_VERSION = 2
 
 export type StoreFailureKind = 'foreign' | 'corrupt' | 'io'
 
@@ -55,7 +55,7 @@ const DDL: readonly string[] = [
     delegation_depth INTEGER,
     agent_preset TEXT,
     title TEXT NOT NULL DEFAULT '',
-    blank INTEGER NOT NULL DEFAULT 0,
+    blank INTEGER NOT NULL DEFAULT 1,
     last_prompt_at INTEGER,
     updated_at INTEGER NOT NULL DEFAULT 0,
     archived INTEGER NOT NULL DEFAULT 0,
@@ -72,6 +72,9 @@ const DDL: readonly string[] = [
     fold_status TEXT NOT NULL DEFAULT 'pending'
       CHECK (fold_status IN ('pending','ok','failed','unsupported','folding')),
     fold_error TEXT,
+    fail_at INTEGER,
+    fail_count INTEGER NOT NULL DEFAULT 0,
+    vanished_at INTEGER,
     last_seq INTEGER NOT NULL DEFAULT -1,
     log_path TEXT,
     log_size INTEGER,
@@ -293,6 +296,7 @@ const DDL: readonly string[] = [
   'CREATE INDEX IF NOT EXISTS tool_calls_name_all ON tool_calls(name)',
   'CREATE INDEX IF NOT EXISTS tool_calls_program ON tool_calls(program)',
   'CREATE INDEX IF NOT EXISTS surface_nodes_gone ON surface_nodes(session_id, gone_seq) WHERE gone_seq IS NOT NULL',
+  'CREATE INDEX IF NOT EXISTS surface_nodes_cat ON surface_nodes(session_id, cat)',
   'CREATE INDEX IF NOT EXISTS events_kind ON events(session_id, kind)',
   'CREATE INDEX IF NOT EXISTS file_ops_path ON file_ops(session_id, path)',
   'CREATE INDEX IF NOT EXISTS skill_loads_name ON skill_loads(name, day)',
