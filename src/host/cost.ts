@@ -15,7 +15,7 @@ export interface CostSource {
   version?(): number
 }
 
-function faceOf(provider: string, model: string, face: PriceFace): CostPriceFace {
+export function faceOf(provider: string, model: string, face: PriceFace): CostPriceFace {
   return {
     provider,
     model,
@@ -26,7 +26,7 @@ function faceOf(provider: string, model: string, face: PriceFace): CostPriceFace
   }
 }
 
-function missOf(provider: string, model: string, miss: PriceMiss): CostPriceMiss {
+export function missOf(provider: string, model: string, miss: PriceMiss): CostPriceMiss {
   return {
     provider,
     model,
